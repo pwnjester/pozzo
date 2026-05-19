@@ -75,19 +75,31 @@ class MetaManager:
             "net_life_force": 0, "successful_bets": 0, "failed_bets": 0,
             "beast_encounters": 0, "unlocked_achievements": []
         }
+        self.save_path = self.get_save_path()
         self.load_stats()
+    
+    def get_save_path(self):
+        """Returns a persistent directory path outside of the temporary PyInstall folder."""
+        if getattr(sys, 'frozen', False):
+            user_home = os.path.expanduser("~")
+            save_dir = os.path.join(user_home, ".pozzo")
+        else:
+            save_dir = os.path.dirname(os.path.abspath(__file__))
+
+        os.makedirs(save_dir, exist_ok=True)
+        return os.path.join(save_dir, self.filename)
 
     def load_stats(self):
-        if os.path.exists(self.filename):
+        if os.path.exists(self.save_path):
             try:
-                with open(self.filename, "r") as f:
+                with open(self.save_path, "r") as f:
                     self.stats.update(json.load(f))
             except Exception:
                 self.bridge.write("Corrupted save file. Starting fresh.\n")
 
     def save_stats(self):
         try:
-            with open(self.filename, "w") as f:
+            with open(self.save_path, "w") as f:
                 json.dump(self.stats, f, indent=4)
         except Exception as e:
             self.bridge.write(f"Failed to access stats: {e}\n")
@@ -536,8 +548,8 @@ if __name__ == "__main__":
         title="POZZO",
         url=f"http://localhost:{server_port}/index.html",
         js_api=bridge,
-        width=1000,
-        height=700,
+        width=1250,
+        height=875,
         resizable=True
     )
     bridge.set_window(window)
