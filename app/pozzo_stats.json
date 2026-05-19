@@ -1,0 +1,14 @@
+{
+    "games_played": 5,
+    "games_won": 0,
+    "highest_score": 0,
+    "net_life_force": 0,
+    "successful_bets": 0,
+    "failed_bets": 0,
+    "beast_encounters": 0,
+    "unlocked_achievements": [
+        "first_plunge",
+        "double_slay",
+        "serial_diver"
+    ]
+}
