@@ -1,4 +1,5 @@
 # py -m PyInstaller --onefile --noconsole --add-data "index.html;." main.py
+# pyinstaller --onefile --noconsole --add-data "index.html:." main.py
 
 import random
 import time
