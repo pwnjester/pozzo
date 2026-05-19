@@ -1,3 +1,5 @@
+# py -m PyInstaller --onefile --noconsole --add-data "index.html;." main.py
+
 import random
 import time
 import json
@@ -21,9 +23,10 @@ CARD_NAMES = {
 
 ACHIEVEMENTS = {
     "first_plunge": {"name": "The First Plunge", "desc": "Play your first match of Pozzo."},
-    "sunken_one": {"name": "The Sunken One", "desc": "Survive the depths and win a game."},
+    "the_fool": {"name": "The Fool", "desc": "Stay silent with XX (The Well)"},
+    "sunken_one": {"name": "The Sunken One", "desc": "Survive a game."},
     "awakened": {"name": "The Awakening", "desc": "Win a game with 18 or more total lives claimed."},
-    "curse_survived": {"name": "Defying the Pit", "desc": "Successfully guess an Odd/Even Blind Bet."},
+    "curse_survived": {"name": "'I See' Said the Blind Man", "desc": "Successfully guess an Odd/Even Blind Bet."},
     "beast_bitten": {"name": "Maul Mark", "desc": "Attempt to trade with the holder of XIX (The Beast)."},
     "well_spring": {"name": "Thirst Quenched", "desc": "Successfully declare 'Well!' and gain a life."},
     "double_slay": {"name": "Cursed End", "desc": "Die or lose someone due to a Cursed Execution (double damage)."},
@@ -94,6 +97,7 @@ class MetaManager:
             self.bridge.write(f"\n>>> ACHIEVEMENT UNLOCKED: {ACHIEVEMENTS[ach_id]['name']} <<<\n")
             self.bridge.write(f"    ({ACHIEVEMENTS[ach_id]['desc']})\n\n")
             self.save_stats()
+            time.sleep(2)
 
 
 class PozzoGame:
@@ -101,14 +105,14 @@ class PozzoGame:
         self.meta = meta_manager
         self.bridge = bridge
         self.players = ["You", "The Mouth", "The Eye", "The Skin", "The Heart", "The Throat"]
-        self.coins = {p: 3 for p in self.players}
+        self.lives = {p: 3 for p in self.players}
         self.dealer_idx = 0
         self.round_num = 1
-        self.pit = 0
+        self.well = 0
         self.ai_thresholds = {"The Mouth": 12, "The Eye": 7, "The Skin": 9, "The Throat": 5}
 
     def get_active_players(self):
-        return [p for p in self.players if self.coins[p] > 0]
+        return [p for p in self.players if self.lives[p] > 0]
 
     def get_next_active_player(self, current_player, active_list):
         idx = active_list.index(current_player)
@@ -121,10 +125,10 @@ class PozzoGame:
 
         self.bridge.write(f"\n=== ROUND {self.round_num} ===\n")
         if is_sudden_death:
-            self.bridge.write("SUDDEN DEATH DETECTED: THE PIT IS OPENING\n")
+            self.bridge.write("SUDDEN DEATH: THE WELL IS OPENING\n")
         self.bridge.write(f"Current Dealer: {dealer}\n")
-        self.bridge.write(f"The Well/Pit Contains: {self.pit} Lives\n")
-        self.bridge.write("Current Lives: " + ", ".join([f"{p}: {'*' * self.coins[p]}" for p in active]) + "\n")
+        self.bridge.write(f"The Well Contains: {self.well} Lives\n")
+        self.bridge.write("Current Lives: " + ", ".join([f"{p}: {'*' * self.lives[p]}" for p in active]) + "\n")
         time.sleep(1.5)
 
         deck = list(range(1, 21)) * 2
@@ -162,10 +166,10 @@ class PozzoGame:
                     else:
                         peeks["You"] = (random_target, hands[random_target])
                         cursed_players.add("You")
-                        self.bridge.write(f"INCORRECT! The Pit brands you with The Curse. You will take DOUBLE damage if you fail this round!\n")
+                        self.bridge.write(f"INCORRECT! The Well brands you with The Curse. You will take DOUBLE damage if you fail this round!\n")
                         self.meta.stats["failed_bets"] += 1
                 else:
-                    self.bridge.write("You refuse to gamble with the dark.\n")
+                    self.bridge.write("You refuse to gamble in the dark.\n")
                 time.sleep(1)
             else:
                 will_gamble = False
@@ -183,7 +187,7 @@ class PozzoGame:
                         self.bridge.write(f"{p} gazes intensely at {random_target} and nods. Their sight was true.\n")
                     else:
                         cursed_players.add(p)
-                        self.bridge.write(f"{p} tries to read {random_target} but winces. A dark aura surrounds them! THEY ARE CURSED.\n")
+                        self.bridge.write(f"{p} tries to read {random_target} but winces. A thick smoke surrounds them! They are cursed.\n")
                     time.sleep(0.5)
 
         time.sleep(1)
@@ -202,26 +206,27 @@ class PozzoGame:
                 if call.lower() == "well!":
                     self.bridge.write("\nYou shout 'WELL!' and halt all trading!\n")
                     well_triggered = True
-                    if self.coins["You"] < 3:
-                        if self.pit > 0:
-                            self.coins["You"] += 1
-                            self.pit -= 1
+                    if self.lives["You"] < 3:
+                        if self.well > 0:
+                            self.lives["You"] += 1
+                            self.well -= 1
                             self.bridge.write("* You reclaimed 1 life from the Well!\n")
                         else:
                             self.bridge.write("* The Well is dry. No lives could be pulled back.\n")
                         self.meta.unlock_achievement("well_spring")
                 else:
-                    self.bridge.write("\nYou didn't declare it in time! You lose 1 life to the Well instead.\n")
-                    self.coins["You"] -= 1
-                    self.pit += 1
+                    self.bridge.write("\nYou didn't declare it! You lose 1 life to the Well instead.\n")
+                    self.meta.unlock_achievement("the_fool")
+                    self.lives["You"] -= 1
+                    self.well += 1
                     well_triggered = True
             else:
                 self.bridge.write(f"\n{well_holder} reveals XX (The Well) and shouts 'WELL!' Halting all trades.\n")
                 well_triggered = True
-                if self.coins[well_holder] < 3:
-                    if self.pit > 0:
-                        self.coins[well_holder] += 1
-                        self.pit -= 1
+                if self.lives[well_holder] < 3:
+                    if self.well > 0:
+                        self.lives[well_holder] += 1
+                        self.well -= 1
                         self.bridge.write(f"* {well_holder} reclaimed 1 life from the Well.\n")
                     else:
                         self.bridge.write(f"* The Well is dry. {well_holder} could not reclaim a life.\n")
@@ -241,7 +246,7 @@ class PozzoGame:
                         choice = self.bridge.read(f"\nYou are the Dealer. Draw a random card from the deck? (y/n): ").strip().lower()
                         if choice == 'y':
                             hands["You"] = deck.pop()
-                            self.bridge.write(f"You put your card away! Your new card is: {card_str(hands['You'])}\n")
+                            self.bridge.write(f"You put your card away. Your new card is: {card_str(hands['You'])}\n")
                             time.sleep(1)
                     else:
                         threshold = self.ai_thresholds.get(p, 9)
@@ -254,7 +259,7 @@ class PozzoGame:
 
                 if p == "You":
                     prompt = f"\nYour Turn (Holding {card_str(hands['You'])})."
-                    if p in cursed_players: prompt += "\nYOU ARE CURSED!"
+                    if p in cursed_players: prompt += "\nYou are CURSED!"
                     choice = self.bridge.read(prompt + f" Target to your left is {target}. [s]kip or [t]rade?: ").strip().lower()
                     action = "trade" if choice == 't' else "skip"
                 else:
@@ -291,7 +296,7 @@ class PozzoGame:
                             if p == "You": self.bridge.write(f"Your new card is: {card_str(hands['You'])}\n")
                             elif chosen_other == "You": self.bridge.write(f"Your card was swept up in the redirection! Your new card is: {card_str(hands['You'])}\n")
                         else:
-                            self.bridge.write("No other dynamic path available. The trade shatters completely.\n")
+                            self.bridge.write("No other path available. The trade shatters completely.\n")
                     elif target_card == 18:
                         self.bridge.write(f"{target} reveals XVIII (Fire)! The trade is BLOCKED.\n")
                         next_after_target = self.get_next_active_player(target, active)
@@ -301,11 +306,11 @@ class PozzoGame:
                             if p == "You": self.bridge.write(f"Your new card is: {card_str(hands['You'])}\n")
                             elif next_after_target == "You": self.bridge.write(f"Your card caught fire and swapped! Your new card is: {card_str(hands['You'])}\n")
                         else:
-                            self.bridge.write("The chaotic fire loops back onto yourself and fizzles out. No trade occurs.\n")
+                            self.bridge.write("The fire loops back onto yourself and fizzles out. No trade occurs.\n")
                     elif target_card == 19:
                         self.bridge.write(f"{target} reveals XIX (The Beast)! The trade is BLOCKED and {p} loses 1 life to the Well!\n")
-                        self.coins[p] -= 1
-                        self.pit += 1
+                        self.lives[p] -= 1
+                        self.well += 1
                         if p == "You":
                             self.meta.stats["beast_encounters"] += 1
                             self.meta.unlock_achievement("beast_bitten")
@@ -316,7 +321,7 @@ class PozzoGame:
                         else: self.bridge.write(f"Cards were swapped between {p} and {target}.\n")
                     time.sleep(1.5)
 
-        self.bridge.write(f"\n--- REVEAL PHASE ---\n")
+        self.bridge.write(f"\n--- THE BIG REVEAL ---\n")
         time.sleep(1)
 
         self.bridge.write("Final Hands:\n")
@@ -341,10 +346,10 @@ class PozzoGame:
                     self.bridge.write("The Depths are appeased: NO ONE loses lives this turn.\n")
                     fool_protection = True
                     for p in players_with_card:
-                        if self.coins[p] < 3:
-                            if self.pit > 0:
-                                self.coins[p] += 1
-                                self.pit -= 1
+                        if self.lives[p] < 3:
+                            if self.well > 0:
+                                self.lives[p] += 1
+                                self.well -= 1
                                 self.bridge.write(f"* {p} safely gains a life from the Well pool!\n")
                             else:
                                 self.bridge.write(f"* The Well pool is dry. {p} cannot extract life.\n")
@@ -353,15 +358,15 @@ class PozzoGame:
                     for p in players_with_card: immune_players.add(p)
 
         if not fool_protection:
-            vulnerable_players = [p for p in active if p not in immune_players and self.coins[p] > 0]
+            vulnerable_players = [p for p in active if p not in immune_players and self.lives[p] > 0]
             if vulnerable_players:
                 min_val = min(hands[p] for p in vulnerable_players)
                 losers = [p for p in vulnerable_players if hands[p] == min_val]
 
                 for l in losers:
                     damage = 2 if l in cursed_players else 1
-                    self.coins[l] -= damage
-                    self.pit += damage
+                    self.lives[l] -= damage
+                    self.well += damage
                     if damage == 2:
                         self.bridge.write(f"\n[CURSE CARNAGE] {l} held lowest card ({card_str(min_val)}) while CURSED. Loses 2 lives!\n")
                         self.meta.unlock_achievement("double_slay")
@@ -371,7 +376,7 @@ class PozzoGame:
                 self.bridge.write("\nEveryone is shielded! No souls harvested.\n")
 
         for p in active:
-            if self.coins[p] <= 0:
+            if self.lives[p] <= 0:
                 verb = "have" if p == "You" else "has"
                 self.bridge.write(f"\n{p} {verb} run out of lives and become *UNWORTHY*!\n")
                 if p == "You": self.meta.unlock_achievement("unworthy_end")
@@ -384,14 +389,14 @@ class PozzoGame:
         self.bridge.clear()
 
         self.bridge.write("====================================\n")
-        self.bridge.write("         THE PIT ACCEPTS YOU        \n")
+        self.bridge.write("        THE WELL ACCEPTS YOU        \n")
         self.bridge.write("====================================\n")
 
         while len(self.get_active_players()) > 1:
             self.play_round()
 
         winner = self.get_active_players()[0]
-        total_won_coins = self.coins[winner] + self.pit
+        total_won_lives = self.lives[winner] + self.well
 
         self.bridge.write(f"\n====================================\n")
         self.meta.stats["games_played"] += 1
@@ -400,27 +405,27 @@ class PozzoGame:
         self.meta.save_stats()
         self.bridge.write(f"GAME OVER\n")
 
-        ending_lives = self.coins.get("You", 0)
-        match_net = (total_won_coins - 3) if winner == "You" else (ending_lives - 3)
+        ending_lives = self.lives.get("You", 0)
+        match_net = (total_won_lives - 3) if winner == "You" else (ending_lives - 3)
         self.meta.stats["net_life_force"] += match_net
 
         if winner == "You":
             self.meta.stats["games_won"] += 1
             self.meta.unlock_achievement("sunken_one")
-            if total_won_coins > self.meta.stats["highest_score"]:
-                self.meta.stats["highest_score"] = total_won_coins
+            if total_won_lives > self.meta.stats["highest_score"]:
+                self.meta.stats["highest_score"] = total_won_lives
 
-        if total_won_coins >= 18:
+        if total_won_lives >= 18:
             self.bridge.write(f"THE AWAKENING\n")
-            self.bridge.write(f"{winner} has claimed all {total_won_coins} lives.\n")
+            self.bridge.write(f"{winner} has claimed all {total_won_lives} lives.\n")
             if winner == "You": self.meta.unlock_achievement("awakened")
         else:
             self.bridge.write(f"The final survivor and *The Sunken One* is: {winner}!\n")
-            self.bridge.write(f"Possessing {total_won_coins} total lives.\n")
+            self.bridge.write(f"Possessing {total_won_lives} total lives.\n")
 
         self.bridge.write(f"====================================\n\n")
         self.meta.save_stats()
-        self.bridge.read("Press Enter to ascend back to the menu...")
+        self.bridge.read("Press Enter to return to the menu...")
 
 
 def run_game_loop(bridge):
@@ -470,7 +475,7 @@ def run_game_loop(bridge):
             bridge.write(" * Ranks range from 1 (Lowest) to 20 (Highest).\n")
             bridge.write(" * At the end of a round, the lowest card loses a life.\n")
             bridge.write(" * The last player remaining keeps their lives + all lives\n")
-            bridge.write("   accumulated inside the Well (The Pit), winning the match.\n\n")
+            bridge.write("   accumulated inside the Well, winning the match.\n\n")
             bridge.write("--- TWIN IMMUNITY (RANKS I TO V) ---\n")
             bridge.write(" If TWO players reveal identical lower-tier cards:\n")
             bridge.write(" * I (The Fool)    : Shuts down execution entirely. NO ONE\n")
@@ -497,7 +502,7 @@ def run_game_loop(bridge):
         elif choice == "4":
             bridge.clear()
             bridge.write("\nThank you for playing Pozzo!\n")
-            time.sleep(1.5)
+            time.sleep(1)
             os._exit(0)
 
 
@@ -530,7 +535,7 @@ if __name__ == "__main__":
         title="POZZO",
         url=f"http://localhost:{server_port}/index.html",
         js_api=bridge,
-        width=900,
+        width=1000,
         height=700,
         resizable=True
     )
