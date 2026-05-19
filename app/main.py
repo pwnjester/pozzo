@@ -35,6 +35,29 @@ ACHIEVEMENTS = {
     "serial_diver": {"name": "Obsession", "desc": "Play a total of 10 matches."}
 }
 
+DECKS = {
+    1: {
+        "name": "The Shallows",
+        "desc": "The standard set. Balanced and forgiving. (Standard 40 cards)",
+        "build": lambda: list(range(1, 21)) * 2
+    },
+    2: {
+        "name": "The Murk",
+        "desc": "Safety is scarce. Fewer Major Arcana to protect you. (35 cards)",
+        "build": lambda: list(range(1, 16)) * 2 + list(range(16, 21))
+    },
+    3: {
+        "name": "The Trench",
+        "desc": "The Well is dry. The Beasts are multiplying. (40 cards)",
+        "build": lambda: list(range(1, 19)) * 2 + [19, 19, 19, 19]
+    },
+    4: {
+        "name": "The Abyss",
+        "desc": "The Fool abandons you. Low cards swarm. Despair. (41 cards)",
+        "build": lambda: list(range(2, 11)) * 3 + list(range(11, 19)) + [19, 19, 19, 19] + [20, 20]
+    }
+}
+
 def card_str(val):
     return CARD_NAMES.get(val, f"Standard {val}")
 
@@ -73,7 +96,8 @@ class MetaManager:
         self.stats = {
             "games_played": 0, "games_won": 0, "highest_score": 0,
             "net_life_force": 0, "successful_bets": 0, "failed_bets": 0,
-            "beast_encounters": 0, "unlocked_achievements": []
+            "beast_encounters": 0, "unlocked_achievements": [],
+            "unlocked_decks": [1]
         }
         self.save_path = self.get_save_path()
         self.load_stats()
@@ -94,6 +118,11 @@ class MetaManager:
             try:
                 with open(self.save_path, "r") as f:
                     self.stats.update(json.load(f))
+                    # Ensure pre-existing stats profiles default to having deck 1 unlocked
+                    if "unlocked_decks" not in self.stats:
+                        self.stats["unlocked_decks"] = [1]
+                    # Convert to standard integers for consistency
+                    self.stats["unlocked_decks"] = [int(x) for x in self.stats["unlocked_decks"]]
             except Exception:
                 self.bridge.write("Corrupted save file. Starting fresh.\n")
 
@@ -114,15 +143,24 @@ class MetaManager:
 
 
 class PozzoGame:
-    def __init__(self, meta_manager, bridge):
+    def __init__(self, meta_manager, bridge, deck_id=1):
         self.meta = meta_manager
         self.bridge = bridge
+        self.deck_id = deck_id
+        self.deck_info = DECKS[deck_id]
         self.players = ["You", "The Mouth", "The Eye", "The Skin", "The Heart", "The Throat"]
         self.lives = {p: 3 for p in self.players}
         self.dealer_idx = 0
         self.round_num = 1
         self.well = 0
-        self.ai_thresholds = {"The Mouth": 12, "The Eye": 7, "The Skin": 9, "The Throat": 5}
+        # AI holds higher cards more aggressively on harder decks
+        deck_difficulty_modifier = (deck_id - 1) * 2 
+        self.ai_thresholds = {
+            "The Mouth": min(18, 12 + deck_difficulty_modifier), 
+            "The Eye": min(16, 7 + deck_difficulty_modifier), 
+            "The Skin": min(17, 9 + deck_difficulty_modifier), 
+            "The Throat": min(15, 5 + deck_difficulty_modifier)
+        }
 
     def get_active_players(self):
         return [p for p in self.players if self.lives[p] > 0]
@@ -144,7 +182,8 @@ class PozzoGame:
         self.bridge.write("Current Lives: " + ", ".join([f"{p}: {'*' * self.lives[p]}" for p in active]) + "\n")
         time.sleep(1.5)
 
-        deck = list(range(1, 21)) * 2
+        # Build dynamic deck based on unlocked tier
+        deck = self.deck_info["build"]()
         random.shuffle(deck)
 
         hands = {p: deck.pop(0) for p in active}
@@ -194,6 +233,10 @@ class PozzoGame:
                 if will_gamble:
                     ai_guess_even = random.choice([True, False])
                     target_is_even = (hands[random_target] % 2 == 0)
+
+                    # On harder decks, AI gets supernatural intuition
+                    if self.deck_id > 1 and random.random() < (self.deck_id * 0.15):
+                        ai_guess_even = target_is_even
 
                     peeks[p] = (random_target, hands[random_target])
                     if ai_guess_even == target_is_even:
@@ -288,12 +331,12 @@ class PozzoGame:
                         if p == "The Heart" and random.random() < 0.25:
                             action = "skip" if action == "trade" else "trade"
 
-                    if action == "trade":
-                        self.bridge.write(f"\n{p} wants to trade cards with {target}...\n")
-                        time.sleep(1)
-                    else:
-                        self.bridge.write(f"\n{p} chooses to Skip.\n")
-                        time.sleep(0.5)
+                if action == "trade":
+                    self.bridge.write(f"\n{p} wants to trade cards with {target}...\n")
+                    time.sleep(1)
+                else:
+                    self.bridge.write(f"\n{p} chooses to Skip.\n")
+                    time.sleep(0.5)
 
                 if action == "trade":
                     target_card = hands[target]
@@ -353,9 +396,9 @@ class PozzoGame:
                 card_counts[val] = card_counts.get(val, []) + [p]
 
         for val, players_with_card in card_counts.items():
-            if len(players_with_card) == 2:
+            if len(players_with_card) >= 2:
                 if val == 1:
-                    self.bridge.write(f"\n[TWIN FOOLS] Both {players_with_card[0]} and {players_with_card[1]} uncover I (The Fool)!\n")
+                    self.bridge.write(f"\n[TWIN FOOLS] Multiple players uncover I (The Fool)!\n")
                     self.bridge.write("The Depths are appeased: NO ONE loses lives this turn.\n")
                     fool_protection = True
                     for p in players_with_card:
@@ -367,7 +410,7 @@ class PozzoGame:
                             else:
                                 self.bridge.write(f"* The Well pool is dry. {p} cannot extract life.\n")
                 else:
-                    self.bridge.write(f"\n[TWIN TRIGGER] Both {players_with_card[0]} and {players_with_card[1]} hold {card_str(val)} and are immune to execution!\n")
+                    self.bridge.write(f"\n[TWIN TRIGGER] Multiple players hold {card_str(val)} and are immune to execution!\n")
                     for p in players_with_card: immune_players.add(p)
 
         if not fool_protection:
@@ -402,7 +445,7 @@ class PozzoGame:
         self.bridge.clear()
 
         self.bridge.write("====================================\n")
-        self.bridge.write("        THE WELL ACCEPTS YOU        \n")
+        self.bridge.write(f" DESCENDING INTO: {self.deck_info['name'].upper()} \n")
         self.bridge.write("====================================\n")
 
         while len(self.get_active_players()) > 1:
@@ -415,7 +458,7 @@ class PozzoGame:
         self.meta.stats["games_played"] += 1
         self.meta.unlock_achievement("first_plunge")
         if self.meta.stats["games_played"] >= 5: self.meta.unlock_achievement("serial_diver")
-        self.meta.save_stats()
+        
         self.bridge.write(f"GAME OVER\n")
 
         ending_lives = self.lives.get("You", 0)
@@ -427,6 +470,15 @@ class PozzoGame:
             self.meta.unlock_achievement("sunken_one")
             if total_won_lives > self.meta.stats["highest_score"]:
                 self.meta.stats["highest_score"] = total_won_lives
+            
+            # Check and unlock the next sequential deck only if winning on the current one
+            next_deck = self.deck_id + 1
+            unlocked_list = self.meta.stats.setdefault("unlocked_decks", [1])
+            if next_deck in DECKS and next_deck not in unlocked_list:
+                unlocked_list.append(next_deck)
+                self.bridge.write(f"\n>>> DEPTH CONQUERED! NEW DECK UNLOCKED: {DECKS[next_deck]['name']} <<<\n")
+                self.bridge.write(f"    ({DECKS[next_deck]['desc']})\n\n")
+                time.sleep(2.5)
 
         if total_won_lives >= 18:
             self.bridge.write(f"THE AWAKENING\n")
@@ -457,8 +509,31 @@ def run_game_loop(bridge):
         choice = bridge.read("Select an option: ").strip()
 
         if choice == "1":
-            game = PozzoGame(meta, bridge)
+            # Handle Deck Selection dynamically based on sequential progression
+            unlocked_list = meta.stats.get("unlocked_decks", [1])
+            available_decks = {k: v for k, v in DECKS.items() if k in unlocked_list}
+            
+            selected_deck = 1
+            if len(available_decks) > 1:
+                bridge.clear()
+                bridge.write("--- SELECT YOUR DEPTH ---\n")
+                for k, v in available_decks.items():
+                    bridge.write(f" [{k}] {v['name']} \n")
+                    bridge.write(f"     > {v['desc']}\n")
+                
+                while True:
+                    d_choice = bridge.read("\nSelect depth by number: ").strip()
+                    if d_choice.isdigit() and int(d_choice) in available_decks:
+                        selected_deck = int(d_choice)
+                        break
+                    bridge.write("Invalid selection. The depths reject you.\n")
+            else:
+                bridge.write(f"\nDescending into {DECKS[1]['name']}...\n")
+                time.sleep(1)
+
+            game = PozzoGame(meta, bridge, selected_deck)
             game.start()
+
         elif choice == "2":
             bridge.clear()
             net = meta.stats['net_life_force']
@@ -471,16 +546,30 @@ def run_game_loop(bridge):
             bridge.write(f" Prophecies Fulfilled: {meta.stats['successful_bets']}\n")
             bridge.write(f" False Visions:       {meta.stats['failed_bets']}\n\n")
 
+            bridge.write("--- DECK UNLOCKS ---\n")
+            unlocked_list = meta.stats.get("unlocked_decks", [1])
+            for k, v in DECKS.items():
+                if k in unlocked_list:
+                    bridge.write(f" [UNLOCKED] {v['name']}\n")
+                else:
+                    prev_deck = k - 1
+                    if prev_deck in unlocked_list:
+                        bridge.write(f" [ LOCKED ] {v['name']} (Conquer {DECKS[prev_deck]['name']} to unlock)\n")
+                    else:
+                        bridge.write(f" [ LOCKED ] {v['name']} (Conquer previous depths first)\n")
+            bridge.write("\n")
+
             bridge.write("--- INSCRIPTIONS ---\n")
             unlocked = meta.stats["unlocked_achievements"]
             for a_id, data in ACHIEVEMENTS.items():
                 status = "[UNLOCKED]" if a_id in unlocked else "[ LOCKED ]"
                 bridge.write(f" {status} {data['name']} - {data['desc']}\n")
             bridge.read("\nPress Enter to return to menu...")
+            
         elif choice == "3":
             bridge.clear()
             bridge.write("==========================================================\n")
-            bridge.write("                       LAWS OF POZZO                      \n")
+            bridge.write("                        LAWS OF POZZO                       \n")
             bridge.write("==========================================================\n")
             bridge.write(" Pozzo is a tactical card game where players must survive  \n")
             bridge.write(" by trading cards to avoid holding the lowest rank.       \n\n")
@@ -495,8 +584,8 @@ def run_game_loop(bridge):
             bridge.write("                      loses life. Both fools recover +1 life\n")
             bridge.write("                      from the Well if it contains any.\n")
             bridge.write(" * II to V         : Those matching players are completely\n")
-            bridge.write("   (Fly/Spit/       immune to losing a life, even if their\n")
-            bridge.write("   Winter/Hunger)   card is the lowest rank at the table.\n\n")
+            bridge.write("   (Fly/Spit/        immune to losing a life, even if their\n")
+            bridge.write("   Winter/Hunger)    card is the lowest rank at the table.\n\n")
             bridge.write("--- MAJOR ARCANA (DEFENSIVE RANKS) ---\n")
             bridge.write(" Triggers when a player on your right attempts to trade:\n")
             bridge.write(" * XVI (Home)      : Blocks the trade completely.\n")
@@ -517,7 +606,6 @@ def run_game_loop(bridge):
             bridge.write("\nThank you for playing Pozzo!\n")
             time.sleep(1)
             os._exit(0)
-
 
 def find_free_port():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
