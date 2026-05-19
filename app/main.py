@@ -101,7 +101,7 @@ class MetaManager:
         }
         self.save_path = self.get_save_path()
         self.load_stats()
-    
+
     def get_save_path(self):
         """Returns a persistent directory path outside of the temporary PyInstall folder."""
         if getattr(sys, 'frozen', False):
@@ -154,11 +154,11 @@ class PozzoGame:
         self.round_num = 1
         self.well = 0
         # AI holds higher cards more aggressively on harder decks
-        deck_difficulty_modifier = (deck_id - 1) * 2 
+        deck_difficulty_modifier = (deck_id - 1) * 2
         self.ai_thresholds = {
-            "The Mouth": min(18, 12 + deck_difficulty_modifier), 
-            "The Eye": min(16, 7 + deck_difficulty_modifier), 
-            "The Skin": min(17, 9 + deck_difficulty_modifier), 
+            "The Mouth": min(18, 12 + deck_difficulty_modifier),
+            "The Eye": min(16, 7 + deck_difficulty_modifier),
+            "The Skin": min(17, 9 + deck_difficulty_modifier),
             "The Throat": min(15, 5 + deck_difficulty_modifier)
         }
 
@@ -458,7 +458,7 @@ class PozzoGame:
         self.meta.stats["games_played"] += 1
         self.meta.unlock_achievement("first_plunge")
         if self.meta.stats["games_played"] >= 5: self.meta.unlock_achievement("serial_diver")
-        
+
         self.bridge.write(f"GAME OVER\n")
 
         ending_lives = self.lives.get("You", 0)
@@ -470,7 +470,7 @@ class PozzoGame:
             self.meta.unlock_achievement("sunken_one")
             if total_won_lives > self.meta.stats["highest_score"]:
                 self.meta.stats["highest_score"] = total_won_lives
-            
+
             # Check and unlock the next sequential deck only if winning on the current one
             next_deck = self.deck_id + 1
             unlocked_list = self.meta.stats.setdefault("unlocked_decks", [1])
@@ -512,7 +512,7 @@ def run_game_loop(bridge):
             # Handle Deck Selection dynamically based on sequential progression
             unlocked_list = meta.stats.get("unlocked_decks", [1])
             available_decks = {k: v for k, v in DECKS.items() if k in unlocked_list}
-            
+
             selected_deck = 1
             if len(available_decks) > 1:
                 bridge.clear()
@@ -520,7 +520,7 @@ def run_game_loop(bridge):
                 for k, v in available_decks.items():
                     bridge.write(f" [{k}] {v['name']} \n")
                     bridge.write(f"     > {v['desc']}\n")
-                
+
                 while True:
                     d_choice = bridge.read("\nSelect depth by number: ").strip()
                     if d_choice.isdigit() and int(d_choice) in available_decks:
@@ -565,7 +565,7 @@ def run_game_loop(bridge):
                 status = "[UNLOCKED]" if a_id in unlocked else "[ LOCKED ]"
                 bridge.write(f" {status} {data['name']} - {data['desc']}\n")
             bridge.read("\nPress Enter to return to menu...")
-            
+
         elif choice == "3":
             bridge.clear()
             bridge.write("==========================================================\n")
