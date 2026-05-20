@@ -1,14 +1,21 @@
 {
-    "games_played": 5,
-    "games_won": 0,
-    "highest_score": 0,
-    "net_life_force": 0,
-    "successful_bets": 0,
+    "games_played": 6,
+    "games_won": 1,
+    "highest_score": 20,
+    "net_life_force": 17,
+    "successful_bets": 2,
     "failed_bets": 0,
     "beast_encounters": 0,
     "unlocked_achievements": [
         "first_plunge",
         "double_slay",
-        "serial_diver"
+        "serial_diver",
+        "curse_survived",
+        "sunken_one",
+        "awakened"
+    ],
+    "unlocked_decks": [
+        1,
+        2
     ]
 }
