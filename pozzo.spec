@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['main.py'],
+    ['pozzo.py'],
     pathex=[],
     binaries=[],
     datas=[('index.html', '.')],
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='main',
+    name='pozzo',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

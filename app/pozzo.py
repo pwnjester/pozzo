@@ -13,7 +13,7 @@ import socketserver
 import socket
 import sys
 
-# Ensure PyInstaller finds the unpacked folder path on Linux
+# ensure PyInstaller finds the unpacked folder path on linux
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     os.chdir(sys._MEIPASS)
 
@@ -408,7 +408,6 @@ class PozzoGame:
                         peeks["You"] = (random_target, hands[random_target])
                         cursed_players.add("You")
                         self.bridge.write(f"INCORRECT! The Well brands you with The Curse. You will take DOUBLE damage if you fail this round!\n")
-                        self.write_card_art(hands[random_target])
                         self.meta.stats["failed_bets"] += 1
                 else:
                     self.bridge.write("You refuse to gamble in the dark.\n")
@@ -605,7 +604,7 @@ class PozzoGame:
                 self.bridge.write(f"EXECUTIONER MATCHED: {', '.join(omen_matches)} hold(s) the Omen card and gain(s) immunity from execution this round!\n")
             else:
                 self.bridge.write("The Executioner's card matched no other. The round continues unaltered.\n")
-            time.sleep(1.5)
+            time.sleep(2.5)
         else:
             self.bridge.write("\n[OMEN] The deck is completely dry. The Executioner claims no card this round.\n")
 
